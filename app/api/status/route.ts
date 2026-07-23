@@ -410,7 +410,7 @@ export async function GET() {
       name: "RECOVERY.PR",
       mark: "RPR",
       description: descriptions.recovery,
-      url: "https://recovery.pr/",
+      url: "https://recovery.pr.gov/",
       sourceLabel: "COR3 Transparency Portal",
     }),
   ]);
