@@ -137,7 +137,10 @@ export function StatusDashboard() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const initialRefresh = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(initialRefresh);
   }, [refresh]);
 
   const services = useMemo(() => {
@@ -196,9 +199,15 @@ export function StatusDashboard() {
             href="#top"
             aria-label="COR3 service health home"
           >
+            {/* The official COR3 lockup is served directly to preserve its
+                transparent artwork and intrinsic high-resolution dimensions. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/cor3-logo-en.png"
               alt="COR3 — Central Office for Recovery, Reconstruction and Resiliency, Government of Puerto Rico"
+              width="4600"
+              height="1815"
+              decoding="async"
             />
           </a>
           <div className="header-context">

@@ -1,98 +1,91 @@
-# vinext-starter
+# Services Health
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+An English-language COR3 service-health dashboard for monitoring the public
+availability of Microsoft 365, Adobe, 3CX, Cloudflare, DRS, and RECOVERY.PR.
+It provides a manual refresh control, status descriptions, source links, and
+clear operational, degraded, outage, and checking states.
 
-## Prerequisites
+## Status states
 
-- Node.js `>=22.13.0`
+- Green: operational
+- Yellow, pulsing: degraded performance or a vendor advisory
+- Red: outage or confirmed unavailability
+- Gray: the status check is still running
 
-## Quick Start
+The dashboard uses official vendor status feeds where they are available.
+DRS and RECOVERY.PR are checked through their public Puerto Rico landing pages.
+An unsuccessful probe can indicate a provider restriction or network issue and
+does not replace the vendor's own incident communication.
+
+## Run locally
+
+### Requirements
+
+- Node.js 22.13 or later
+- Outbound HTTPS access to the monitored public services
+- pnpm 11 or npm
+
+### pnpm
 
 ```bash
+git clone https://github.com/INFRA-ORG-COR3/services-health.git
+cd services-health
+corepack enable
+pnpm install
+pnpm dev
+```
+
+### npm
+
+```bash
+git clone https://github.com/INFRA-ORG-COR3/services-health.git
+cd services-health
 npm install
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Open [http://localhost:3000](http://localhost:3000) in a browser. The
+application does not require API keys or a database for its standard checks.
 
-## Included Shape
+## Production-style local run
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+pnpm install
+pnpm build
+pnpm start
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Use `npm run build` and `npm start` instead when using npm.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+## Verification
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+```bash
+pnpm test
+pnpm lint
+```
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+The test command creates a production build and validates the rendered
+dashboard shell. The lint command checks the TypeScript and React source.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+## Customize monitored services
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+Service definitions and server-side probes are maintained in
+`app/api/status/route.ts`. The dashboard presentation and service descriptions
+are in `app/status-dashboard.tsx`.
 
-## Useful Commands
+When adding a service:
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+1. Prefer an official machine-readable status feed.
+2. Use a stable public landing page only when no official feed is available.
+3. Keep the source label and direct source URL visible to users.
+4. Set explicit timeouts so one provider cannot delay the full dashboard.
 
-## Learn More
+## Project structure
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+- `app/`: dashboard, styles, metadata, and status API
+- `public/`: official COR3 brand assets and local fonts
+- `tests/`: rendered-output verification
+- `.openai/hosting.json`: optional metadata for the hosted Sites deployment
+
+The `.openai/hosting.json` file is not required to run the application on a
+local computer.

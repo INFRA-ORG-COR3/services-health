@@ -20,8 +20,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     icons: {
-      icon: "/cor3-logo-en.png",
-      shortcut: "/cor3-logo-en.png",
+      icon: "/cor3-mark.png",
+      shortcut: "/cor3-mark.png",
+      apple: "/cor3-mark.png",
     },
     openGraph: {
       title,
