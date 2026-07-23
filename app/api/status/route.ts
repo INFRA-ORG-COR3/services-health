@@ -395,6 +395,61 @@ async function endpointStatus(
   }
 }
 
+async function recoveryStatus(checkedAt: string): Promise<Result> {
+  const targetUrl = "https://recovery.pr.gov/";
+  const direct = await endpointStatus(checkedAt, {
+    id: "recovery-pr",
+    name: "RECOVERY.PR",
+    mark: "RPR",
+    description: descriptions.recovery,
+    url: targetUrl,
+    sourceLabel: "COR3 Transparency Portal",
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "accept-language": "en-US,en;q=0.9",
+      "cache-control": "no-cache",
+    },
+  });
+
+  if (direct.status === "operational") return direct;
+
+  try {
+    const response = await timedFetch(
+      `https://api.microlink.io/?url=${encodeURIComponent(targetUrl)}`,
+      { headers: { accept: "application/json" } }
+    );
+    if (!response.ok) return direct;
+    const payload = (await response.json()) as {
+      status?: string;
+      data?: { title?: string; url?: string };
+    };
+    const confirmed =
+      payload.status === "success" &&
+      payload.data?.url === targetUrl &&
+      /cor3/i.test(payload.data?.title ?? "");
+    if (!confirmed) return direct;
+
+    return baseResult(
+      {
+        id: "recovery-pr",
+        name: "RECOVERY.PR",
+        mark: "RPR",
+        description: descriptions.recovery,
+        status: "operational",
+        detail:
+          "The RECOVERY.PR landing page was confirmed available (HTTP 200).",
+        sourceLabel: "COR3 Transparency Portal",
+        sourceUrl: targetUrl,
+        sourceType: "Landing page availability check",
+      },
+      checkedAt
+    );
+  } catch {
+    return direct;
+  }
+}
+
 export async function GET() {
   const checkedAt = new Date().toISOString();
   const services = await Promise.all([
@@ -410,20 +465,7 @@ export async function GET() {
       url: "https://prdrs.cor3.pr/",
       sourceLabel: "PR DRS sign-in",
     }),
-    endpointStatus(checkedAt, {
-      id: "recovery-pr",
-      name: "RECOVERY.PR",
-      mark: "RPR",
-      description: descriptions.recovery,
-      url: "https://recovery.pr.gov/",
-      sourceLabel: "COR3 Transparency Portal",
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "accept-language": "en-US,en;q=0.9",
-        "cache-control": "no-cache",
-      },
-    }),
+    recoveryStatus(checkedAt),
   ]);
 
   return Response.json(
