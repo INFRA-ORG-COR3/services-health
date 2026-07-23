@@ -40,7 +40,7 @@ test("server-renders the Services Health dashboard", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Service Health \| COR3<\/title>/i);
-  assert.match(html, /src="\/cor3-logo-en\.png"/i);
+  assert.match(html, /src="\/cor3-logo-en\.svg"/i);
   assert.match(html, /href="\/cor3-mark\.png"/i);
   assert.match(html, /Microsoft 365/);
   assert.match(html, /Adobe/);
@@ -53,18 +53,24 @@ test("server-renders the Services Health dashboard", async () => {
 });
 
 test("ships sharp COR3 assets and portable local-run metadata", async () => {
-  const [css, layout, packageJsonText, readme, logo, mark] = await Promise.all([
+  const [css, layout, packageJsonText, readme, logoSvg, logo, mark] =
+    await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../public/cor3-logo-en.svg", import.meta.url), "utf8"),
     readFile(new URL("../public/cor3-logo-en.png", import.meta.url)),
     readFile(new URL("../public/cor3-mark.png", import.meta.url)),
-  ]);
+    ]);
 
   assert.deepEqual(pngDimensions(logo), { width: 4600, height: 1815 });
   assert.deepEqual(pngDimensions(mark), { width: 1024, height: 1024 });
-  assert.match(css, /aspect-ratio:\s*4600\s*\/\s*1815/);
+  assert.match(logoSvg, /viewBox="74\.891 82\.781 551\.951 217\.789"/);
+  assert.match(logoSvg, /<path\b/);
+  assert.match(logoSvg, /<image\b/);
+  assert.doesNotMatch(logoSvg, /<script\b/i);
+  assert.match(css, /aspect-ratio:\s*551\.951\s*\/\s*217\.789/);
   assert.match(css, /object-fit:\s*contain/);
   assert.doesNotMatch(css, /object-fit:\s*cover/);
   assert.match(layout, /icon:\s*"\/cor3-mark\.png"/);

@@ -203,10 +203,10 @@ export function StatusDashboard() {
                 transparent artwork and intrinsic high-resolution dimensions. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/cor3-logo-en.png"
+              src="/cor3-logo-en.svg"
               alt="COR3 — Central Office for Recovery, Reconstruction and Resiliency, Government of Puerto Rico"
-              width="4600"
-              height="1815"
+              width="552"
+              height="218"
               decoding="async"
             />
           </a>

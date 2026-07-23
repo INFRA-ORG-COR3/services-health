@@ -83,7 +83,7 @@ When adding a service:
 ## Project structure
 
 - `app/`: dashboard, styles, metadata, and status API
-- `public/`: official COR3 brand assets and local fonts
+- `public/`: official COR3 vector/raster brand assets and local fonts
 - `tests/`: rendered-output verification
 - `.openai/hosting.json`: optional metadata for the hosted Sites deployment
 
