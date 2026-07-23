@@ -53,10 +53,11 @@ test("server-renders the Services Health dashboard", async () => {
 });
 
 test("ships sharp COR3 assets and portable local-run metadata", async () => {
-  const [css, layout, packageJsonText, readme, logoSvg, logo, mark] =
+  const [css, layout, statusRoute, packageJsonText, readme, logoSvg, logo, mark] =
     await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/status/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../public/cor3-logo-en.svg", import.meta.url), "utf8"),
@@ -74,6 +75,11 @@ test("ships sharp COR3 assets and portable local-run metadata", async () => {
   assert.match(css, /object-fit:\s*contain/);
   assert.doesNotMatch(css, /object-fit:\s*cover/);
   assert.match(layout, /icon:\s*"\/cor3-mark\.png"/);
+  assert.match(
+    statusRoute,
+    /https:\/\/new\.cloudflarestatus\.com\/api\/v2\/status\.json/,
+  );
+  assert.doesNotMatch(statusRoute, /https:\/\/www\.cloudflarestatus\.com/);
 
   const packageJson = JSON.parse(packageJsonText);
   assert.equal(packageJson.name, "services-health");

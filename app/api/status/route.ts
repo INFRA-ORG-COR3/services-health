@@ -288,10 +288,10 @@ async function threeCxStatus(checkedAt: string): Promise<Result> {
 }
 
 async function cloudflareStatus(checkedAt: string): Promise<Result> {
-  const sourceUrl = "https://www.cloudflarestatus.com/";
+  const sourceUrl = "https://new.cloudflarestatus.com/";
   try {
     const response = await timedFetch(
-      "https://www.cloudflarestatus.com/api/v2/status.json",
+      "https://new.cloudflarestatus.com/api/v2/status.json",
       { headers: { accept: "application/json" } }
     );
     if (!response.ok) throw new Error("API unavailable");
