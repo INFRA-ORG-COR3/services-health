@@ -347,12 +347,17 @@ async function endpointStatus(
     description: string;
     url: string;
     sourceLabel: string;
+    headers?: Record<string, string>;
   }
 ): Promise<Result> {
   try {
     const response = await timedFetch(config.url, {
       redirect: "follow",
-      headers: { accept: "text/html,application/xhtml+xml" },
+      headers: {
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        ...config.headers,
+      },
     });
     const status: Level = response.status >= 500 ? "outage" : "operational";
     return baseResult(
@@ -412,6 +417,12 @@ export async function GET() {
       description: descriptions.recovery,
       url: "https://recovery.pr.gov/",
       sourceLabel: "COR3 Transparency Portal",
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "accept-language": "en-US,en;q=0.9",
+        "cache-control": "no-cache",
+      },
     }),
   ]);
 
