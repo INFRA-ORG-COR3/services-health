@@ -40,3 +40,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Universal AI Project Context Standard
+.context-backup/
+__pycache__/
+*.pyc
