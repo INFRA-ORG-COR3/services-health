@@ -70,7 +70,27 @@ jobs:
       id: typecheck
       if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       run: |
-        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        test ! -e ci-worker-runtime.generated.d.ts
+        trap 'rc=$?; rm -f -- ci-worker-runtime.generated.d.ts; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        # Use the configuration emitted by this build, including its runtime date/flags.
+        config_path="$(node --input-type=module -e '
+          import { readFileSync, realpathSync } from "node:fs";
+          import { resolve, dirname, relative, sep } from "node:path";
+          const pointer = resolve(".wrangler/deploy/config.json");
+          const meta = JSON.parse(readFileSync(pointer, "utf8"));
+          if (typeof meta.configPath !== "string" || !meta.configPath) throw new Error("Build configuration redirect missing");
+          const config = realpathSync(resolve(dirname(pointer), meta.configPath));
+          const rel = relative(realpathSync("dist"), config);
+          if (!rel || rel === ".." || rel.startsWith(".." + sep) || resolve(rel) === rel) throw new Error("Generated configuration must be inside dist");
+          console.log(config);
+        ')"
+        printf 'Runtime types configuration: %s\n' "$config_path"
+        sha256sum "$config_path"
+        WRANGLER_SEND_METRICS=false WRANGLER_WRITE_LOGS=false \
+          node ./node_modules/wrangler/bin/wrangler.js types ci-worker-runtime.generated.d.ts \
+            --config "$config_path" --include-runtime true --include-env false
+        test -s ci-worker-runtime.generated.d.ts
+        sha256sum ci-worker-runtime.generated.d.ts
         node ./node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
     - name: Existing rendered HTML tests
       id: tests
@@ -172,7 +192,27 @@ jobs:
       id: typecheck
       if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       run: |
-        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        test ! -e ci-worker-runtime.generated.d.ts
+        trap 'rc=$?; rm -f -- ci-worker-runtime.generated.d.ts; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        # Use the configuration emitted by this build, including its runtime date/flags.
+        config_path="$(node --input-type=module -e '
+          import { readFileSync, realpathSync } from "node:fs";
+          import { resolve, dirname, relative, sep } from "node:path";
+          const pointer = resolve(".wrangler/deploy/config.json");
+          const meta = JSON.parse(readFileSync(pointer, "utf8"));
+          if (typeof meta.configPath !== "string" || !meta.configPath) throw new Error("Build configuration redirect missing");
+          const config = realpathSync(resolve(dirname(pointer), meta.configPath));
+          const rel = relative(realpathSync("dist"), config);
+          if (!rel || rel === ".." || rel.startsWith(".." + sep) || resolve(rel) === rel) throw new Error("Generated configuration must be inside dist");
+          console.log(config);
+        ')"
+        printf 'Runtime types configuration: %s\n' "$config_path"
+        sha256sum "$config_path"
+        WRANGLER_SEND_METRICS=false WRANGLER_WRITE_LOGS=false \
+          node ./node_modules/wrangler/bin/wrangler.js types ci-worker-runtime.generated.d.ts \
+            --config "$config_path" --include-runtime true --include-env false
+        test -s ci-worker-runtime.generated.d.ts
+        sha256sum ci-worker-runtime.generated.d.ts
         node ./node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
     - name: Existing rendered HTML tests
       id: tests
