@@ -1,0 +1,225 @@
+# CI-SH-01: independent pnpm and npm validation. No deployment.
+name: Application CI
+'on':
+  pull_request:
+    branches:
+    - main
+  push:
+    branches:
+    - main
+permissions:
+  contents: read
+jobs:
+  application-pnpm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout event commit
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Record checkout and immutable candidate hashes
+      id: baseline
+      env:
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+      run: |
+        test -z "$(git status --porcelain=v1 --untracked-files=all)"
+        test ! -e node_modules
+        printf 'event=%s\ncheckout_sha=%s\npr_head_sha=%s\npr_base_sha=%s\n' \
+          "$GITHUB_EVENT_NAME" "$(git rev-parse HEAD)" "$PR_HEAD_SHA" "$PR_BASE_SHA"
+        printf 'runner_image=%s\nrunner_image_version=%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        sha256sum package.json pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/application-ci.yml package-lock.json > "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+        cat "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+    - name: Set up Node 22.19.0
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: 22.19.0
+        architecture: x64
+        check-latest: false
+    - name: Set up pnpm 11.9.0 without install or cache
+      uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      with:
+        version: 11.9.0
+        run_install: false
+        cache: false
+        standalone: false
+    - name: Verify exact toolchain
+      run: |
+        test "$(node --version)" = 'v22.19.0'
+        test "$(npm --version)" = '10.9.3'
+        node --version
+        npm --version
+        test "$(pnpm --version)" = '11.9.0'
+        pnpm --version
+    - name: Clean locked installation
+      id: install
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        pnpm install --frozen-lockfile
+    - name: Build
+      id: build
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        pnpm run build
+    - name: Typecheck
+      id: typecheck
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        node ./node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+    - name: Existing rendered HTML tests
+      id: tests
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        node --test tests/rendered-html.test.mjs
+    - name: Lint
+      id: lint
+      if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        pnpm run lint
+    - name: Verify candidate unchanged
+      id: integrity
+      if: ${{ !cancelled() && steps.baseline.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        sha256sum --check "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+        git diff --quiet
+        git diff --cached --quiet
+        test -z "$(git ls-files --others --exclude-standard)"
+    - name: Record validation outcomes
+      id: summary
+      if: ${{ always() }}
+      env:
+        INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        INSTALL_EXIT: ${{ steps.install.outputs.exit_code }}
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        BUILD_EXIT: ${{ steps.build.outputs.exit_code }}
+        TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+        TYPECHECK_EXIT: ${{ steps.typecheck.outputs.exit_code }}
+        TESTS_OUTCOME: ${{ steps.tests.outcome }}
+        TESTS_EXIT: ${{ steps.tests.outputs.exit_code }}
+        LINT_OUTCOME: ${{ steps.lint.outcome }}
+        LINT_EXIT: ${{ steps.lint.outputs.exit_code }}
+        INTEGRITY_OUTCOME: ${{ steps.integrity.outcome }}
+        INTEGRITY_EXIT: ${{ steps.integrity.outputs.exit_code }}
+      run: |
+        {
+          printf '## Application CI: %s\n\n' "$GITHUB_JOB"
+          printf 'Checkout: `%s`\n\n' "$(git rev-parse HEAD)"
+          printf '| Step | Outcome | Exit code |\n| --- | --- | --- |\n'
+          printf '| install | %s | %s |\n' "${INSTALL_OUTCOME:-not-run}" "${INSTALL_EXIT:-NOT RUN}"
+          printf '| build | %s | %s |\n' "${BUILD_OUTCOME:-not-run}" "${BUILD_EXIT:-NOT RUN}"
+          printf '| typecheck | %s | %s |\n' "${TYPECHECK_OUTCOME:-not-run}" "${TYPECHECK_EXIT:-NOT RUN}"
+          printf '| tests | %s | %s |\n' "${TESTS_OUTCOME:-not-run}" "${TESTS_EXIT:-NOT RUN}"
+          printf '| lint | %s | %s |\n' "${LINT_OUTCOME:-not-run}" "${LINT_EXIT:-NOT RUN}"
+          printf '| integrity | %s | %s |\n' "${INTEGRITY_OUTCOME:-not-run}" "${INTEGRITY_EXIT:-NOT RUN}"
+        } >> "$GITHUB_STEP_SUMMARY"
+  application-npm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout event commit
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Record checkout and immutable candidate hashes
+      id: baseline
+      env:
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+      run: |
+        test -z "$(git status --porcelain=v1 --untracked-files=all)"
+        test ! -e node_modules
+        printf 'event=%s\ncheckout_sha=%s\npr_head_sha=%s\npr_base_sha=%s\n' \
+          "$GITHUB_EVENT_NAME" "$(git rev-parse HEAD)" "$PR_HEAD_SHA" "$PR_BASE_SHA"
+        printf 'runner_image=%s\nrunner_image_version=%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        sha256sum package.json pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/application-ci.yml package-lock.json > "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+        cat "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+    - name: Set up Node 22.19.0
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: 22.19.0
+        architecture: x64
+        check-latest: false
+    - name: Verify exact toolchain
+      run: |
+        test "$(node --version)" = 'v22.19.0'
+        test "$(npm --version)" = '10.9.3'
+        node --version
+        npm --version
+    - name: Clean locked installation
+      id: install
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        npm ci --no-audit --no-fund
+    - name: Build
+      id: build
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        npm run build
+    - name: Typecheck
+      id: typecheck
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        node ./node_modules/typescript/bin/tsc --noEmit --incremental false --pretty false
+    - name: Existing rendered HTML tests
+      id: tests
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        node --test tests/rendered-html.test.mjs
+    - name: Lint
+      id: lint
+      if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        npm run lint
+    - name: Verify candidate unchanged
+      id: integrity
+      if: ${{ !cancelled() && steps.baseline.outcome == 'success' }}
+      run: |
+        trap 'rc=$?; printf "exit_code=%s\n" "$rc" >> "$GITHUB_OUTPUT"; exit "$rc"' EXIT
+        sha256sum --check "$RUNNER_TEMP/candidate-$GITHUB_JOB.sha256"
+        git diff --quiet
+        git diff --cached --quiet
+        test -z "$(git ls-files --others --exclude-standard)"
+    - name: Record validation outcomes
+      id: summary
+      if: ${{ always() }}
+      env:
+        INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        INSTALL_EXIT: ${{ steps.install.outputs.exit_code }}
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        BUILD_EXIT: ${{ steps.build.outputs.exit_code }}
+        TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+        TYPECHECK_EXIT: ${{ steps.typecheck.outputs.exit_code }}
+        TESTS_OUTCOME: ${{ steps.tests.outcome }}
+        TESTS_EXIT: ${{ steps.tests.outputs.exit_code }}
+        LINT_OUTCOME: ${{ steps.lint.outcome }}
+        LINT_EXIT: ${{ steps.lint.outputs.exit_code }}
+        INTEGRITY_OUTCOME: ${{ steps.integrity.outcome }}
+        INTEGRITY_EXIT: ${{ steps.integrity.outputs.exit_code }}
+      run: |
+        {
+          printf '## Application CI: %s\n\n' "$GITHUB_JOB"
+          printf 'Checkout: `%s`\n\n' "$(git rev-parse HEAD)"
+          printf '| Step | Outcome | Exit code |\n| --- | --- | --- |\n'
+          printf '| install | %s | %s |\n' "${INSTALL_OUTCOME:-not-run}" "${INSTALL_EXIT:-NOT RUN}"
+          printf '| build | %s | %s |\n' "${BUILD_OUTCOME:-not-run}" "${BUILD_EXIT:-NOT RUN}"
+          printf '| typecheck | %s | %s |\n' "${TYPECHECK_OUTCOME:-not-run}" "${TYPECHECK_EXIT:-NOT RUN}"
+          printf '| tests | %s | %s |\n' "${TESTS_OUTCOME:-not-run}" "${TESTS_EXIT:-NOT RUN}"
+          printf '| lint | %s | %s |\n' "${LINT_OUTCOME:-not-run}" "${LINT_EXIT:-NOT RUN}"
+          printf '| integrity | %s | %s |\n' "${INTEGRITY_OUTCOME:-not-run}" "${INTEGRITY_EXIT:-NOT RUN}"
+        } >> "$GITHUB_STEP_SUMMARY"

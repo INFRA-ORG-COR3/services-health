@@ -1,0 +1,8 @@
+strictDepBuilds: true
+verifyDepsBeforeRun: error
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
